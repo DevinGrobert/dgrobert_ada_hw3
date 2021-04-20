@@ -1,0 +1,167 @@
+---
+title: "dgrobert_ada_hw3"
+author: "deving"
+date: "4/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+library(tidyverse)
+library(ggpubr)
+library(ggpmisc)
+library(broom)
+
+
+# CHALLENGE 1:
+
+#  Read in kamilar and cooper data
+
+f <- "https://raw.githubusercontent.com/difiore/ada-2021-datasets/main/KamilarAndCooperData.csv"
+d <- read_csv(f, col_names = TRUE) 
+head(d)
+
+#  fit regression model for untransformed data
+lm_1<-lm(WeaningAge_d ~ Brain_Size_Species_Mean, d)
+
+#  scatterplot with fitted line and model equation
+p1 <- ggplot(data = d, aes(x = Brain_Size_Species_Mean, y = WeaningAge_d), na.rm=TRUE) +
+  geom_point()
+p1  <- p1 + geom_smooth(method = 'lm', se= FALSE, color="black" )+
+  stat_regline_equation(label.y = 1000)
+p1
+
+#  id and interpret point estimate of the slope, also interpret null hypothesis that slope = 0.  find 90% CI for the slope
+summary.lm(lm_1)
+
+#  slope is 2.627, very low p value leads us to reject the null.  The 90% CI for the slope is the range between slopes estimate plus 1.96*SE and slope estimate minus 1.96*SE: 
+upper<-2.6371+1.96*0.1847
+lower<-2.6371-1.96*0.1847
+upper  
+#2.999112
+lower
+#2.275088
+view(brain)
+#add 90% CI & PI lines, include legend
+
+ci<- predict(lm_1,
+  newdata = data.frame(Brain_Size_Species_Mean=d$Brain_Size_Species_Mean),
+  interval = "confidence", level = 0.9
+)
+ci<-data.frame(ci)
+ci<-cbind(d$Brain_Size_Species_Mean, ci)
+names(ci) <- c("brain", "c.fit", "c.lwr", "c.upr")
+p1 <- ggplot(data = d, aes(x = Brain_Size_Species_Mean, y = WeaningAge_d), na.rm=TRUE)
+p1 <- p1 + geom_point(alpha=0.5)
+p1 <- p1 + geom_line(
+  data = ci, aes(x = brain, y=c.fit,
+  color = "FIT LINE"))
+p1 <- p1 + geom_line(
+  data=ci, aes(x=brain, y=c.lwr,
+  color="CI"))
+p1 <- p1 + geom_line(
+  data=ci, aes(x=brain, y=c.upr, color="CI"))
+p1
+pi<- predict(lm_1,
+  newdata = data.frame(Brain_Size_Species_Mean=d$Brain_Size_Species_Mean),
+  interval = "prediction", level = 0.9
+)
+pi <- data.frame(pi)
+pi <- cbind(d$Brain_Size_Species_Mean, pi)
+names(pi) <-c("brain", "p.fit", "p.lwr", "p.upr")
+
+p1 <- p1 + geom_line(data = pi, aes(x = brain, y = p.lwr, color = "PI"))
+p1 <- p1 + geom_line(data = pi, aes(x = brain, y = p.upr, color = "PI"))
+p1 <- p1 + scale_color_manual(values=c("blue", "black", "red"))
+p1
+
+#  point estimate and 90% PI for brain weight of 750
+
+point <- predict(lm_1,
+  newdata = data.frame(Brain_Size_Species_Mean = 750),
+  interval = "confidence", level = 0.9
+) 
+point
+#  the point estimate and prediction interval are unreliable for this value of the predictor because it is far higher than the observed range of mean brain size values
+
+#  do all that over but with log transformed data
+d$Brain_Size_Species_Mean<-(log(d$Brain_Size_Species_Mean))
+d$WeaningAge_d<-(log(d$WeaningAge_d))
+
+lm_2<-lm(WeaningAge_d ~ Brain_Size_Species_Mean, d)
+
+#  id and interpret point estimate of the slope, also interpret null hypothesis that slope = 0.  find 90% CI for the slope
+summary.lm(lm_2)
+
+#p value is very small so the null is rejected.  slope of log transformed data is 0.57
+
+upper<- 0.57116+1.96*0.03061
+lower<- 0.57116-1.96*0.03061
+upper  
+#0.6311556
+lower
+#0.5111644
+
+#create plot with log transformed data and CI, PI, Fit line, and legend
+
+ci<- predict(lm_2,
+  newdata = data.frame(Brain_Size_Species_Mean=d$Brain_Size_Species_Mean),
+  interval = "confidence", level = 0.9
+)
+ci<-data.frame(ci)
+ci<-cbind(d$Brain_Size_Species_Mean, ci)
+names(ci) <- c("brain", "c.fit", "c.lwr", "c.upr")
+p2 <- ggplot(data = d, aes(x = Brain_Size_Species_Mean, y = WeaningAge_d), na.rm=TRUE)
+p2 <- p2 + geom_point(alpha=0.5)
+p2 <- p2 + geom_line(
+  data = ci, aes(x = brain, y=c.fit,
+  color = "FIT LINE"))
+p2 <- p2 + geom_line(
+  data=ci, aes(x=brain, y=c.lwr,
+  color="CI"))
+p2 <- p2 + geom_line(
+  data=ci, aes(x=brain, y=c.upr, color="CI"))
+p2 <- p2 + scale_y_continuous(trans='log10')
+p2 <- p2 + scale_x_continuous(trans='log10')
+p2
+pi<- predict(lm_2,
+  newdata = data.frame(Brain_Size_Species_Mean=d$Brain_Size_Species_Mean),
+  interval = "prediction", level = 0.9
+)
+pi <- data.frame(pi)
+pi <- cbind(d$Brain_Size_Species_Mean, pi)
+names(pi) <-c("brain", "p.fit", "p.lwr", "p.upr")
+
+p2 <- p2 + geom_line(data = pi, aes(x = brain, y = p.lwr, color = "PI"))
+p2 <- p2 + geom_line(data = pi, aes(x = brain, y = p.upr, color = "PI"))
+p2 <- p2 + scale_color_manual(values=c("blue", "black", "red"))
+p2
+#change "windows" to "quartz" on a mac if you want to see untransformed and transformed in separate windows
+windows()
+p1
+windows()
+p2
+# the log transformed version seems to capture the relationship between the variables much better, indicating that the relationship is geometric (constant ratio between terms) and not arithmetic (constant difference between terms).  This is very often the case in biology and ecology, which limits intuitive understanding.  The red flag is the point cluster that falls outside the PI with brain size around 100 (untransformed version).  That point cluster fits pretty nicely in the transformed version.
+
+##  CHALLENGE #2:
