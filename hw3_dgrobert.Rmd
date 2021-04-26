@@ -32,7 +32,13 @@ library(tidyverse)
 library(ggpubr)
 library(ggpmisc)
 library(broom)
-
+library(infer)
+library(lmodel2)
+library(manipulate)
+library(patchwork)
+library(infer)
+library(boot)
+library(car)
 
 # CHALLENGE 1:
 
@@ -162,6 +168,89 @@ windows()
 p1
 windows()
 p2
-# the log transformed version seems to capture the relationship between the variables much better, indicating that the relationship is geometric (constant ratio between terms) and not arithmetic (constant difference between terms).  This is very often the case in biology and ecology, which limits intuitive understanding.  The red flag is the point cluster that falls outside the PI with brain size around 100 (untransformed version).  That point cluster fits pretty nicely in the transformed version.
+# the log transformed version seems to capture the relationship between the variables much better, indicating that the relationship is geometric (constant ratio between terms) and not arithmetic (constant difference between terms).  This is very often the case in biology and ecology, which limits intuitive understanding and probably is because we sample in fewer dimensions than the underlying biological driver, e.g. height is a linear proxy for a physical phenomena that occurs in 3 dimensions, similar but interestingly distinct examples from from reproduction and scaling corrections for population demographic data. The red flag in this case is the point cluster that falls outside the PI with brain size around 100 (untransformed version).  That point cluster fits pretty nicely in the transformed version.
 
-##  CHALLENGE #2:
+##  CHALLENGE #2
+# re-read in kamilar and cooper data bc the challenge 1 version has been rendered unpure
+
+f <- "https://raw.githubusercontent.com/difiore/ada-2021-datasets/main/KamilarAndCooperData.csv"
+d <- read_csv(f, col_names = TRUE) 
+view(d)
+#run reg on log transformed group size and log female body mass, report beta coefs
+#remove missing values for Boot function to work later
+d=na.omit(d)
+#log transform
+d$log_gs<-log(d$MeanGroupSize)
+d$log_fbm<-log(d$Body_mass_female_mean)
+#create linear model object
+lm_1<-lm(log_gs ~ log_fbm, data=d)
+summary(lm_1)
+#intercept: 1.14, slope: 0.15
+
+#generate bootstrap sampling dist and plot histo for each beta coef
+#intercept
+boot.coefs <- Boot(lm_1, f=coef, R=1000) 
+
+hist(boot.coefs)
+
+#estimate standard error
+summary(boot.coefs)
+
+#intercept SE= 1.61, slope SE=0.19
+
+#determine 95% confidence intervals of beta coefs
+confint(boot.coefs, level=0.95, type="norm")
+
+#intercept: -1.96 to 4.35, slope: -0.23 to 0.52
+
+# the SEs estimated from bootstrap sampling distribution are a little higher than from the original linear model
+
+#compare boot strap CIs to lm CIs
+confint(lm_1, level=0.95, type="norm")
+# the CIs from bootstrap are larger, but not as much as I might have expected.  pretty similar.
+
+#  CHALLENGE 3
+#write your own function called boot-lm...etc
+
+#set up a generic bootstrapping function
+
+  boot_lm <- function(d, model, reps) {
+# d is data source, model lets you use functions like lm() or others, reps is number of bootstrapped samples
+  original.est <- get(model)(d)
+# original est initial estimate to be replicated  
+  n_est <- length(original.est)
+#n_est calculates the number of outputs to be estimated
+  temp <- matrix(NA, ncol = n_est , nrow = reps)
+# temp is the empty matrix to hold bootstrapped values
+  nobs <- nrow(d)
+#nobs is total observations to resample from
+#here is the actual bootstrapping process:  
+  for (i in 1:reps) {
+    posdraws <- ceiling(runif(nobs)*nobs)
+    draw <- d[posdraws,]
+    temp[i,] <- get(model)(draw)
+  }
+#  now we add a couple of add'l outputs including sd and CI
+  sds <- apply(temp,2,sd)
+  CI <- apply(temp, 2, quantile, probs = c(0.025, 0.975))
+  print(rbind(original.est, sds, CI))
+  return(list(estimates=temp, sds=sds))
+}
+
+#here is the first model, female body mass predicts group size
+gs_fbm <- function(d) lm(d$log_gs ~ d$log_fbm)[[1]]
+
+gs_fbm.res<-boot_lm(d, "gs_fbm", reps=1000)
+
+#creating a log transform of day length variable
+d$log_dl<-log(d$DayLength_km)
+
+#female body mass predicts day length
+dl_fbm <- function(d) lm(d$log_dl ~ d$log_fbm)[[1]]
+
+dl_fbm.res<-boot_lm(d, "dl_fbm", reps=1000)
+
+#female body mass and group size predict day length
+dl_fbm_gs <- function(d) lm((d$log_dl) ~ (d$log_fbm) + (d$log_gs))[[1]]
+
+dl_fbm_gs.res<-boot_lm(d, "dl_fbm", reps=1000)
